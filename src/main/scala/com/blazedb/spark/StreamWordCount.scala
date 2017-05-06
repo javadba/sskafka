@@ -29,7 +29,7 @@ object StreamWordCount {
   }
   
   def main(args: Array[String]) = {
-    val sconf = new SparkConf().setMaster("local").setAppName("StreamWC")
+    val sconf = new SparkConf().setMaster("local[2]").setAppName("StreamWC")
     val sc = new SparkContext(sconf)
     val swc = new StreamWordCount(sc, 3, 10)
     swc.run
@@ -52,7 +52,8 @@ class StreamWordCount(@transient sc: SparkContext, batchIntervalSecs: Int, perSe
 
     val stateSpec = StateSpec.function(updateFn _)
               .initialState(initRdd)
-              .numPartitions(Runtime.getRuntime.availableProcessors)
+//              .numPartitions(Runtime.getRuntime.availableProcessors)
+              .numPartitions(2)
               .timeout(Seconds(300))
 
   def createStream(/*sc: SparkContext, batchIntervalSecs: Int,perSec:Int */): StreamingContext = {
@@ -68,7 +69,7 @@ class StreamWordCount(@transient sc: SparkContext, batchIntervalSecs: Int, perSe
 
     val stateSnapStream = wcStateStream.stateSnapshots
     stateSnapStream.foreachRDD { rdd =>
-      rdd.toDF("word","count").registerTempTable("batch_word_counts")
+      rdd.toDF("word","count").registerTempTable("word_count")
     }
     ssc.remember(Minutes(5))
     ssc.checkpoint("file:///tmp/wcStreams")
@@ -82,7 +83,10 @@ class StreamWordCount(@transient sc: SparkContext, batchIntervalSecs: Int, perSe
 
 //    val createStreamInst = createStream(sc, batchIntervalSecs, perSec) _
     val ssc = StreamingContext.getActiveOrCreate(createStream)
-    ssc.awaitTerminationOrTimeout(batchIntervalSecs * 2 * 1000)
+    ssc.awaitTerminationOrTimeout(batchIntervalSecs  * 1000)
+    val df = sqlContext.sql("select * from word_count")
+    println(s"count of df = ${df.count}")
+
   }
 
 }
